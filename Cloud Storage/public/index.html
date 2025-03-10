@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cloud Link 🔗</title>
+    <link rel="icon" href="icon.ico">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .storage-info {
+            background-color: #e0e0e0;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .progress-bar {
+            width: 100%;
+            background-color: #ddd;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .progress {
+            width: 0%;
+            height: 20px;
+            background-color: #4CAF50;
+            border-radius: 5px;
+            transition: width 0.5s;
+        }
+        #fileList {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+        }
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .file-actions button {
+            margin-left: 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="storage-info">
+        <h2><img src="icon.png" alt="icon">Cloud Link 🔗</h2>
+        <div id="storageUsage">Storage Used: 0 MB / 5 GB</div>
+        <div class="progress-bar">
+            <div id="storageProgress" class="progress"></div>
+        </div>
+    </div>
+
+    <div>
+        <input type="file" id="fileUpload">
+        <button onclick="uploadFile()">Upload File</button>
+    </div>
+
+    <div id="fileList">
+        <h3>Your Files</h3>
+        <!-- Files will be dynamically populated here -->
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:5000';
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileUpload');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert('File uploaded successfully');
+                    fileInput.value = ''; // Clear file input
+                    loadFiles(); // Refresh file list
+                } else {
+                    alert(result.error);
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                alert('Error uploading file');
+            }
+        }
+
+        async function loadFiles() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/files`);
+                const data = await response.json();
+
+                const fileList = document.getElementById('fileList');
+                const storageUsage = document.getElementById('storageUsage');
+                const storageProgress = document.getElementById('storageProgress');
+
+                // Clear existing files
+                fileList.innerHTML = '<h3>Your Files</h3>';
+
+                // Update storage info
+                const usedGB = (data.total_storage_used / (1024 * 1024 * 1024)).toFixed(2);
+                storageUsage.textContent = `Storage Used: ${usedGB} GB / 5 GB`;
+                storageProgress.style.width = `${(data.total_storage_used / data.total_storage_limit) * 100}%`;
+
+                // Populate file list
+                data.files.forEach(file => {
+                    const fileItem = document.createElement('div');
+                    fileItem.classList.add('file-item');
+                    
+                    const fileSizeKB = (file.size / 1024).toFixed(2);
+                    
+                    fileItem.innerHTML = `
+                        <span>${file.filename} (${fileSizeKB} KB)</span>
+                        <div class="file-actions">
+                            <button onclick="downloadFile('${file.unique_id}')">Download</button>
+                            <button onclick="deleteFile('${file.unique_id}')">Delete</button>
+                        </div>
+                    `;
+
+                    fileList.appendChild(fileItem);
+                });
+            } catch (error) {
+                console.error('Error loading files:', error);
+            }
+        }
+
+        async function downloadFile(uniqueId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/download/${uniqueId}`);
+                const blob = await response.blob();
+                
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = ''; // Browser will use original filename
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            } catch (error) {
+                console.error('Download error:', error);
+                alert('Error downloading file');
+            }
+        }
+
+        async function deleteFile(uniqueId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/delete/${uniqueId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert('File deleted successfully');
+                    loadFiles(); // Refresh file list
+                } else {
+                    alert(result.error);
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                alert('Error deleting file');
+            }
+        }
+
+        // Load files on page load
+        loadFiles();
+    </script>
+</body>
+</html>
